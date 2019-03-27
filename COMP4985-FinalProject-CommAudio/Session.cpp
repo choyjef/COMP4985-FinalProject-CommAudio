@@ -371,3 +371,104 @@ void connectUDP() {
 		return;
 	}
 }
+
+BOOL WaveMakeHeader(unsigned long ulSize, HGLOBAL HData, HGLOBAL HWaveHdr, LPSTR lpData, LPWAVEHDR lpWaveHdr)
+{
+	HData = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE, ulSize);
+	if (!HData) return FALSE;
+
+	lpData = (LPSTR)GlobalLock(HData);
+	if (!lpData)
+	{
+		GlobalFree(HData);
+		return FALSE;
+	}
+
+	HWaveHdr = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE, sizeof(WAVEHDR));
+	if (!HWaveHdr)
+	{
+		GlobalUnlock(HData);
+		GlobalFree(HData);
+		return FALSE;
+	}
+
+	if (!lpWaveHdr)
+	{
+		GlobalUnlock(HWaveHdr);
+		GlobalFree(HWaveHdr);
+		GlobalUnlock(HData);
+		GlobalFree(HData);
+		return FALSE;
+	}
+
+	ZeroMemory(lpWaveHdr, sizeof(WAVEHDR));
+	lpWaveHdr->lpData = lpData;
+	lpWaveHdr->dwBufferLength = ulSize;
+
+	return TRUE;
+}
+
+
+void WaveFreeHeader(HGLOBAL HData, HGLOBAL HWaveHdr)
+{
+	GlobalUnlock(HWaveHdr);
+	GlobalFree(HWaveHdr);
+	GlobalUnlock(HData);
+	GlobalFree(HData);
+}
+
+BOOL WaveRecordOpen(LPHWAVEIN lphwi, HWND Hwnd, int nChannels, long lFrequency, int nBits)
+{
+	WAVEFORMATEX wfx;
+	wfx.wFormatTag = WAVE_FORMAT_PCM;
+	wfx.nChannels = (WORD)nChannels;
+	wfx.nSamplesPerSec = (DWORD)lFrequency;
+	wfx.wBitsPerSample = (WORD)nBits;
+	wfx.nBlockAlign = (WORD)((wfx.nChannels * wfx.wBitsPerSample) / 8);
+	wfx.nAvgBytesPerSec = (wfx.nSamplesPerSec * wfx.nBlockAlign);
+	wfx.cbSize = 0;
+
+	MMRESULT result = waveInOpen(lphwi, WAVE_MAPPER, &wfx, (LONG)Hwnd, NULL,
+		CALLBACK_WINDOW);
+
+	if (result == MMSYSERR_NOERROR) return TRUE;
+	return FALSE;
+}
+
+BOOL WaveRecordBegin(HWAVEIN hwi, LPWAVEHDR lpWaveHdr)
+{
+	MMRESULT result = waveInPrepareHeader(hwi, lpWaveHdr, sizeof(WAVEHDR));
+	if (result == MMSYSERR_NOERROR)
+	{
+		MMRESULT result = waveInAddBuffer(hwi, lpWaveHdr, sizeof(WAVEHDR));
+		if (result == MMSYSERR_NOERROR)
+		{
+			MMRESULT result = waveInStart(hwi);
+			if (result == MMSYSERR_NOERROR) return TRUE;
+		}
+	}
+
+	if (result == MMSYSERR_INVALHANDLE)
+		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_INVALHANDLE]\n");
+	if (result == MMSYSERR_NODRIVER)
+		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_NODRIVER]\n");
+	if (result == MMSYSERR_NOMEM)
+		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_NOMEM]\n");
+	if (result == MMSYSERR_INVALPARAM)
+		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_INVALPARAM]\n");
+
+	return FALSE;
+}
+
+void WaveRecordEnd(HWAVEIN hwi, LPWAVEHDR lpWaveHdr)
+{
+	waveInStop(hwi);
+	waveInReset(hwi);
+	waveInUnprepareHeader(hwi, lpWaveHdr, sizeof(WAVEHDR));
+}
+
+void WaveRecordClose(HWAVEIN hwi)
+{
+	waveInReset(hwi);
+	waveInClose(hwi);
+}
