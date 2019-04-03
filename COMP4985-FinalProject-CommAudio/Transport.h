@@ -22,3 +22,6 @@ DWORD WINAPI UDPServerWorkerThread(LPVOID lpParameter);
 void CALLBACK UDPRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
 DWORD WINAPI UDPClientWorkerThread(LPVOID lpParameter);
 void CALLBACK UDPSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
+
+DWORD WINAPI UnicastSendAudioWorkerThread(LPVOID lpParameter);
+void CALLBACK UnicastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);

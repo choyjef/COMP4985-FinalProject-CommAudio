@@ -32,7 +32,7 @@
 ----------------------------------------------------------------------------------------------------------------------*/
 #include "Session.h"
 
-LPSOCKET_INFORMATION SInfo;
+char filerino[] = "ShakeYourBootay.wav";
 
 /*------------------------------------------------------------------------------------------------------------------
 --	FUNCTION:		initServer
@@ -363,11 +363,131 @@ void connectUDP() {
 
 	threadParams = (LPCLIENT_THREAD_PARAMS)GlobalAlloc(GPTR, sizeof(CLIENT_THREAD_PARAMS));
 
-	threadParams->SI = SInfo;
-	threadParams->server = server;
+	threadParams->SI = *SInfo;
+	threadParams->sin = server;
 
 	if ((ThreadHandle = CreateThread(NULL, 0, UDPClientWorkerThread, (LPVOID)threadParams, 0, &ThreadId)) == NULL) {
 		OutputDebugStringA("CreateThread failed");
 		return;
 	}
+}
+
+
+
+void initUnicastSend() {
+	WSADATA WSAData;
+	int err;
+	SOCKET sock;
+	struct	sockaddr_in client;
+	char* buf;
+	HANDLE ThreadHandle;
+	DWORD ThreadId;
+	LPCLIENT_THREAD_PARAMS threadParams;
+
+	// start dll
+	if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
+		//printf("DLL not found!\n");
+		OutputDebugStringA("DLL not found!");
+		exit(1);
+	}
+	//printf("startup success \n");
+	OutputDebugStringA("startup success");
+	// open wave file
+	if (!OpenWaveFile(filerino)) {
+		return;
+	}
+	//printf("file read success\n");
+	OutputDebugStringA("file read success");
+
+	// create socket
+
+	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
+		//printf("error creating socket");
+		OutputDebugStringA("error creating socket");
+		return;
+	}
+	//printf("socket created \n");
+	OutputDebugStringA("socket created");
+
+	// fill address 
+	memset((char *)&client, 0, sizeof(client));
+	client.sin_family = AF_INET;
+	client.sin_port = htons(UNICAST_PORT);
+	client.sin_addr.s_addr = inet_addr(UNICAST_ADDRESS);
+
+	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
+		sizeof(SOCKET_INFORMATION))) == NULL)
+	{
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "GlobalAlloc() failed with error %d\n", GetLastError());
+		OutputDebugStringA(errorMessage);
+		return;
+	}
+	SInfo->Socket = sock;
+	SInfo->BytesSEND = 0;
+	SInfo->BytesRECV = 0;
+	SInfo->peer = client;
+
+	threadParams = (LPCLIENT_THREAD_PARAMS)GlobalAlloc(GPTR, sizeof(CLIENT_THREAD_PARAMS));
+
+	threadParams->SI = *SInfo;
+	threadParams->sin = client;
+
+	if ((ThreadHandle = CreateThread(NULL, 0, UnicastSendAudioWorkerThread, (LPVOID)threadParams, 0, &ThreadId)) == NULL) {
+		//printf("CreateThread failed");
+		OutputDebugStringA("createthread failed");
+		return;
+	}
+}
+
+void initUnicastRecv() {
+	WSADATA WSAData;
+	SOCKET sock;
+	struct sockaddr_in sin;
+	int err;
+	HANDLE ThreadHandle;
+	DWORD ThreadId;
+
+	// start dll
+	if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
+		printf("DLL not found!\n");
+		exit(1);
+	}
+	printf("startup success \n");
+
+	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
+		printf("error creating socket");
+		return;
+	}
+	printf("socket created \n");
+
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = INADDR_ANY; // Stack assigns the local IP address
+	sin.sin_port = htons(UNICAST_PORT);
+
+	// Name the local socket with values in sin structure
+	if (bind(sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+		printf("could not bind socket\n");
+		return;
+	}
+	printf("socket bound \n");
+
+	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
+		sizeof(SOCKET_INFORMATION))) == NULL)
+	{
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "GlobalAlloc() failed with error %d\n", GetLastError());
+		OutputDebugStringA(errorMessage);
+		return;
+	}
+	SInfo->Socket = sock;
+	SInfo->BytesSEND = 0;
+	SInfo->BytesRECV = 0;
+
+	//if ((ThreadHandle = CreateThread(NULL, 0, ReceiveAudioWorkerThread, (LPVOID)SInfo, 0, &ThreadId)) == NULL) {
+	//	printf("CreateThread failed\n");
+	//	return;
+	//}
+
 }

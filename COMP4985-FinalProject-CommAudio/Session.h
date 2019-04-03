@@ -13,3 +13,6 @@ void initServer(HWND hwnd, int protocol);
 void initClient(HWND hwnd, int protocol);
 void connectTCP(HWND hwnd);
 void connectUDP();
+
+void initUnicastSend();
+void initUnicastRecv();

@@ -46,6 +46,15 @@ int recvPacketsCount = 0;
 sockaddr_in server;
 high_resolution_clock::time_point firstPacketTime, lastPacketTime;
 
+
+// jeff_unicast variables
+int nPacketsSent = 0;
+int nPacketsRecv = 0;
+int nBytesRecv = 0;
+int nBytesSent = 0;
+int playbackSendPosition = 0;
+
+
 /*------------------------------------------------------------------------------------------------------------------
 --	FUNCTION:		TCPServerWorkerThread
 --
@@ -571,10 +580,10 @@ DWORD WINAPI UDPClientWorkerThread(LPVOID lpParameter) {
 	sprintf_s(metaData, "+%d %d", getPacketSize(), getNumPackets());
 	
 	threadParams = (LPCLIENT_THREAD_PARAMS)lpParameter;
-	server = threadParams->server;
+	server = threadParams->sin;
 	server_len = sizeof(server);
 	EventArray[0] = WSACreateEvent();
-	SocketInfo = threadParams->SI;
+	SocketInfo = &(threadParams->SI);
 
 
 	generateUDPSendBufferData(getPacketSize());
@@ -655,6 +664,116 @@ void CALLBACK UDPSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERL
 				sprintf_s(errorMessage, "WSASend() failed with error %d\n", WSAGetLastError());
 				OutputDebugStringA(errorMessage);
 				//OutputDebugStringA("WSARecv() failed");
+				return;
+			}
+		}
+	}
+}
+
+DWORD WINAPI UnicastSendAudioWorkerThread(LPVOID lpParameter) {
+
+	DWORD Flags, Index, SendBytes;
+	WSAEVENT EventArray[1];
+	CLIENT_THREAD_PARAMS* params;
+	LPSOCKET_INFORMATION SocketInfo;
+	char *buf;
+	int peer_len = sizeof(params->sin);
+
+
+	// send audio format data
+	buf = (char *)malloc(sizeof(PCMWAVEFORMAT));
+	memcpy(buf, &PCMWaveFmtRecord, sizeof(PCMWAVEFORMAT));
+
+	params = (CLIENT_THREAD_PARAMS*)lpParameter;
+	EventArray[0] = WSACreateEvent();
+	SocketInfo = &(params->SI);
+
+	SocketInfo->DataBuf.len = sizeof(PCMWAVEFORMAT);
+
+	SocketInfo->DataBuf.buf = buf;
+	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
+	Flags = 0;
+
+	while (TRUE) {
+
+		// listen on port with specified completion routine
+		if (WSASendTo(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags,
+			(sockaddr *) &(params->sin), peer_len, &(SocketInfo->Overlapped), UnicastAudioSendCompRoutine) == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				char err[1024];
+				//printf("WSARecv() failed with error %d\n", WSAGetLastError());
+				sprintf_s(err, "WSASendTo() failed with error: %d", WSAGetLastError());
+				OutputDebugStringA(err);
+				free(buf);
+				return FALSE;
+			}
+		}
+
+		// idle in alertable state for completion routine return
+		while (TRUE) {
+			Index = WSAWaitForMultipleEvents(1, EventArray, FALSE, WSA_INFINITE, TRUE);
+			if (Index == WSA_WAIT_FAILED) {
+				//printf("Wait for multiple event failed");
+				OutputDebugStringA("wait for multiple event failed");
+			}
+
+		}
+	}
+
+}
+
+void CALLBACK UnicastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags) {
+	//using namespace TransferDetails;
+	DWORD SendBytes, Flags;
+	LPSOCKET_INFORMATION SocketInfo;
+	sockaddr_in client;
+	int client_len;
+	SocketInfo = (LPSOCKET_INFORMATION)Overlapped;
+	char *buf;
+	char msg[1024];
+
+	int peer_len = sizeof(SocketInfo->peer);
+
+	nPacketsSent++;
+	nBytesSent += BytesTransferred;
+	//printf("Packets sent: %d\n", TransferDetails::nPacketsSent);
+	//printf("Bytes sent: %d\n", TransferDetails::nBytesSent);
+
+	//sprintf_s(msg, "Packets sent: %d\n", TransferDetails::nPacketsSent);
+	//OutputDebugStringA(msg);
+	//sprintf_s(msg, "Bytes sent: %d\n", TransferDetails::nBytesSent);
+	//OutputDebugStringA(msg);
+
+	free(SocketInfo->DataBuf.buf);
+	buf = (char *)malloc(PACKET_SIZE);
+	Flags = 0;
+
+
+	if (playbackSendPosition < WaveHeader.dwBufferLength) {
+		DWORD bytesToRead;
+		buf = (char *)malloc(PACKET_SIZE);
+
+
+		if (playbackSendPosition + PACKET_SIZE > WaveHeader.dwBufferLength) {
+			bytesToRead = WaveHeader.dwBufferLength - playbackSendPosition;
+		}
+		else {
+			bytesToRead = PACKET_SIZE;
+		}
+
+		if (nPacketsSent % 10 == 0) {
+			Sleep(300);
+		}
+
+		memcpy(buf, WaveHeader.lpData + playbackSendPosition, bytesToRead);
+		SocketInfo->DataBuf.buf = buf;
+		SocketInfo->DataBuf.len = PACKET_SIZE;
+		playbackSendPosition += PACKET_SIZE;
+		if (WSASendTo(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags,
+			(sockaddr *) &(SocketInfo->peer), peer_len, &(SocketInfo->Overlapped), UnicastAudioSendCompRoutine) == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				printf("WSARecv() failed with error %d\n", WSAGetLastError());
+				free(buf);
 				return;
 			}
 		}
