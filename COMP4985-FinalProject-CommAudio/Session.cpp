@@ -32,7 +32,22 @@
 ----------------------------------------------------------------------------------------------------------------------*/
 #include "Session.h"
 
+#define MAXADDRSTR  16
 char filerino[] = "ShakeYourBootay.wav";
+#define TIMECAST_ADDR "234.5.6.7"
+#define TIMECAST_PORT 8910
+char achMCAddr[MAXADDRSTR] = TIMECAST_ADDR;
+u_long lMCAddr;
+u_short nPort = TIMECAST_PORT;
+struct ip_mreq stMreq;         /* Multicast interface structure */
+// SERVER
+#define TIMECAST_TTL    2
+#define TIMECAST_INTRVL 3
+u_long  lTTL = TIMECAST_TTL;
+u_short nInterval = TIMECAST_INTRVL;
+int nRet;
+SOCKADDR_IN stLclAddr, stSrcAddr;
+
 
 /*------------------------------------------------------------------------------------------------------------------
 --	FUNCTION:		initServer
@@ -489,6 +504,198 @@ void initUnicastRecv() {
 		return;
 	}
 
+}
+
+VOID initMulticastRecv() {
+	WSADATA WSAData;
+	SOCKET sock;
+	struct sockaddr_in sin;
+	int err;
+	HANDLE ThreadHandle;
+	DWORD ThreadId;
+	BOOL fFlag;
+
+	// start dll
+	if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
+		printf("DLL not found!\n");
+		exit(1);
+	}
+	printf("startup success \n");
+
+	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
+		printf("error creating socket");
+		return;
+	}
+	printf("socket created \n");
+
+	fFlag = TRUE;
+	if (setsockopt(sock,
+		SOL_SOCKET,
+		SO_REUSEADDR,
+		(char *)&fFlag,
+		sizeof(fFlag)) == SOCKET_ERROR) {
+		printf("setsockopt() SO_REUSEADDR failed, Err: %d\n",
+			WSAGetLastError());
+	};
+
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = INADDR_ANY; // Stack assigns the local IP address
+	sin.sin_port = htons(nPort);
+
+	// Name the local socket with values in sin structure
+	if (bind(sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+		printf("could not bind socket\n");
+		return;
+	}
+	printf("socket bound \n");
+
+	/* Join the multicast group so we can receive from it */
+	stMreq.imr_multiaddr.s_addr = inet_addr(achMCAddr);
+	stMreq.imr_interface.s_addr = INADDR_ANY;
+	nRet = setsockopt(sock,
+		IPPROTO_IP,
+		IP_ADD_MEMBERSHIP,
+		(char *)&stMreq,
+		sizeof(stMreq));
+	if (nRet == SOCKET_ERROR) {
+		printf(
+			"setsockopt() IP_ADD_MEMBERSHIP address %s failed, Err: %d\n",
+			achMCAddr, WSAGetLastError());
+	}
+
+	printf("Now waiting for time updates from the TimeCast server\n");
+	printf("  multicast group address: %s, port number: %d\n",
+		achMCAddr, nPort);
+
+	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
+		sizeof(SOCKET_INFORMATION))) == NULL)
+	{
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "GlobalAlloc() failed with error %d\n", GetLastError());
+		OutputDebugStringA(errorMessage);
+		return;
+	}
+	SInfo->Socket = sock;
+	SInfo->BytesSEND = 0;
+	SInfo->BytesRECV = 0;
+
+	if ((ThreadHandle = CreateThread(NULL, 0, MulticastReceiveAudioWorkerThread, (LPVOID)SInfo, 0, &ThreadId)) == NULL) {
+		printf("CreateThread failed\n");
+		return;
+	}
+}
+
+VOID initMulticastSend() {
+	WSADATA WSAData;
+	int err;
+	SOCKET sock;
+	struct	sockaddr_in client;
+	char* buf;
+	HANDLE ThreadHandle;
+	DWORD ThreadId;
+	LPCLIENT_THREAD_PARAMS threadParams;
+	BOOL fFlag;
+
+	// start dll
+	if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
+		printf("DLL not found!\n");
+		exit(1);
+	}
+	printf("startup success \n");
+
+	printf("Multicast Address:%s, Port:%d, IP TTL:%d, Interval:%d\n",
+		achMCAddr, nPort, lTTL, nInterval);
+
+	// open wave file
+	if (!OpenWaveFile(filerino)) {
+		printf("Failed to open file");
+		return;
+	}
+	printf("file read success\n");
+
+	// create socket
+
+	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
+		printf("error creating socket");
+		return;
+	}
+	printf("socket created \n");
+	stLclAddr.sin_family = AF_INET;
+	stLclAddr.sin_addr.s_addr = htonl(INADDR_ANY); /* any interface */
+	stLclAddr.sin_port = 0;                 /* any port */
+	nRet = bind(sock,
+		(struct sockaddr*) &stLclAddr,
+		sizeof(stLclAddr));
+	if (nRet == SOCKET_ERROR) {
+		printf("bind() port: %d failed, Err: %d\n", nPort,
+			WSAGetLastError());
+	}
+
+	stMreq.imr_multiaddr.s_addr = inet_addr(achMCAddr);
+	stMreq.imr_interface.s_addr = INADDR_ANY;
+	nRet = setsockopt(sock,
+		IPPROTO_IP,
+		IP_ADD_MEMBERSHIP,
+		(char *)&stMreq,
+		sizeof(stMreq));
+	if (nRet == SOCKET_ERROR) {
+		printf(
+			"setsockopt() IP_ADD_MEMBERSHIP address %s failed, Err: %d\n",
+			achMCAddr, WSAGetLastError());
+	}
+
+	/* Set IP TTL to traverse up to multiple routers */
+	nRet = setsockopt(sock,
+		IPPROTO_IP,
+		IP_MULTICAST_TTL,
+		(char *)&lTTL,
+		sizeof(lTTL));
+	if (nRet == SOCKET_ERROR) {
+		printf("setsockopt() IP_MULTICAST_TTL failed, Err: %d\n",
+			WSAGetLastError());
+	}
+
+	/* Disable loopback */
+	fFlag = FALSE;
+	nRet = setsockopt(sock,
+		IPPROTO_IP,
+		IP_MULTICAST_LOOP,
+		(char *)&fFlag,
+		sizeof(fFlag));
+	if (nRet == SOCKET_ERROR) {
+		printf("setsockopt() IP_MULTICAST_LOOP failed, Err: %d\n",
+			WSAGetLastError());
+	}
+
+	// fill address 
+	memset((char *)&client, 0, sizeof(client));
+	client.sin_family = AF_INET;
+	client.sin_port = htons(nPort);
+	client.sin_addr.s_addr = inet_addr(achMCAddr);
+
+	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
+		sizeof(SOCKET_INFORMATION))) == NULL)
+	{
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "GlobalAlloc() failed with error %d\n", GetLastError());
+		OutputDebugStringA(errorMessage);
+		return;
+	}
+	SInfo->Socket = sock;
+	SInfo->BytesSEND = 0;
+	SInfo->BytesRECV = 0;
+	SInfo->peer = client;
+
+	threadParams = (LPCLIENT_THREAD_PARAMS)GlobalAlloc(GPTR, sizeof(CLIENT_THREAD_PARAMS));
+
+	threadParams->SI = *SInfo;
+	threadParams->sin = client;
+
+	if ((ThreadHandle = CreateThread(NULL, 0, MulticastSendAudioWorkerThread, (LPVOID)threadParams, 0, &ThreadId)) == NULL) {
+		printf("CreateThread failed");
+		return;
+	}
 }
 
 BOOL WaveMakeHeader(unsigned long ulSize, HGLOBAL HData, HGLOBAL HWaveHdr, LPSTR lpData, LPWAVEHDR lpWaveHdr)
