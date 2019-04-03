@@ -17,6 +17,9 @@ void initClient(HWND hwnd, int protocol);
 void connectTCP(HWND hwnd);
 void connectUDP();
 
+void initUnicastSend();
+void initUnicastRecv();
+
 // VoIP Functions
 BOOL WaveMakeHeader(unsigned long ulSize, HGLOBAL HData, HGLOBAL HWaveHdr, LPSTR lpData, LPWAVEHDR lpWaveHdr);
 void WaveFreeHeader(HGLOBAL HData, HGLOBAL HWaveHdr);
