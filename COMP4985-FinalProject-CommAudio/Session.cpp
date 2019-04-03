@@ -450,16 +450,16 @@ void initUnicastRecv() {
 
 	// start dll
 	if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
-		printf("DLL not found!\n");
+		OutputDebugStringA("DLL not found!\n");
 		exit(1);
 	}
-	printf("startup success \n");
+	OutputDebugStringA("startup success \n");
 
 	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
-		printf("error creating socket");
+		OutputDebugStringA("error creating socket");
 		return;
 	}
-	printf("socket created \n");
+	OutputDebugStringA("socket created \n");
 
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
@@ -468,10 +468,10 @@ void initUnicastRecv() {
 
 	// Name the local socket with values in sin structure
 	if (bind(sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
-		printf("could not bind socket\n");
+		OutputDebugStringA("could not bind socket\n");
 		return;
 	}
-	printf("socket bound \n");
+	OutputDebugStringA("socket bound \n");
 
 	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
 		sizeof(SOCKET_INFORMATION))) == NULL)
@@ -485,9 +485,9 @@ void initUnicastRecv() {
 	SInfo->BytesSEND = 0;
 	SInfo->BytesRECV = 0;
 
-	//if ((ThreadHandle = CreateThread(NULL, 0, ReceiveAudioWorkerThread, (LPVOID)SInfo, 0, &ThreadId)) == NULL) {
-	//	printf("CreateThread failed\n");
-	//	return;
-	//}
+	if ((ThreadHandle = CreateThread(NULL, 0, UnicastReceiveAudioWorkerThread, (LPVOID)SInfo, 0, &ThreadId)) == NULL) {
+		OutputDebugStringA("CreateThread failed\n");
+		return;
+	}
 
 }

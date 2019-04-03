@@ -779,3 +779,105 @@ void CALLBACK UnicastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, L
 		}
 	}
 }
+
+DWORD WINAPI UnicastReceiveAudioWorkerThread(LPVOID lpParameter) {
+	DWORD Flags, Index, RecvBytes;
+	WSAEVENT EventArray[1];
+	LPSOCKET_INFORMATION SocketInfo;
+	sockaddr_in server;
+	int server_len;
+	char * buf;
+
+	EventArray[0] = WSACreateEvent();
+	SocketInfo = (LPSOCKET_INFORMATION)lpParameter;
+
+	buf = (char *)malloc(PACKET_SIZE);
+	SocketInfo->DataBuf.buf = buf;
+	SocketInfo->DataBuf.len = PACKET_SIZE;
+	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
+	Flags = 0;
+	server_len = sizeof(server);
+
+	while (TRUE) {
+		if (WSARecvFrom(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags,
+			(sockaddr *)&server, &server_len, &(SocketInfo->Overlapped), UnicastAudioReceiveCompRoutine) == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				printf("WSARecv() failed with error %d\n", WSAGetLastError());
+
+				free(buf);
+				return FALSE;
+			}
+		}
+
+		while (TRUE) {
+			Index = WSAWaitForMultipleEvents(1, EventArray, FALSE, 5000, TRUE);
+			if (Index == WSA_WAIT_FAILED) {
+				OutputDebugStringA("Wait for multiple event failed");
+			}
+		}
+	}
+
+}
+
+void CALLBACK UnicastAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags) {
+	DWORD RecvBytes;
+	DWORD Flags;
+	sockaddr_in server;
+	int server_len;
+	char *buf;
+
+	LPSOCKET_INFORMATION SI = (LPSOCKET_INFORMATION)Overlapped;
+
+	if (Error != 0) {
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "I/O operation failed with error %d\n", Error);
+		OutputDebugStringA(errorMessage);
+		closesocket(SI->Socket);
+		return;
+	}
+	if (BytesTransferred == 0) {
+		printf("Closing socket %d\n", SI->Socket);
+		closesocket(SI->Socket);
+		return;
+	}
+
+	nPacketsRecv++;
+	nBytesRecv += BytesTransferred;
+	printf("Received %d bytes\n", BytesTransferred);
+	printf("Packets received: %d\n", nPacketsRecv);
+	printf("Bytes received: %d\n", nBytesRecv);
+
+	if (nPacketsRecv == 1) {
+		memcpy(&PCMWaveFmtRecord, SI->DataBuf.buf, BytesTransferred);
+		printPCMInfo();
+		OpenOutputDevice();
+	}
+	else {
+
+		playQueue.add_node(SI->DataBuf.buf, BytesTransferred);
+		if (nPacketsRecv == NUM_BUFFS + 1) {
+			waveOutPause(wo);
+			streamPlayback();
+			waveOutRestart(wo);
+		}
+	}
+
+	ZeroMemory(&(SI->Overlapped), sizeof(WSAOVERLAPPED));
+	free(SI->DataBuf.buf);
+	buf = (char *)malloc(PACKET_SIZE);
+	SI->DataBuf.buf = buf;
+	SI->DataBuf.len = PACKET_SIZE;
+	server_len = sizeof(server);
+	Flags = 0;
+
+	if (WSARecvFrom(SI->Socket, &(SI->DataBuf), 1, &RecvBytes, &Flags,
+		(sockaddr *)&server, &server_len, &(SI->Overlapped), UnicastAudioReceiveCompRoutine) == SOCKET_ERROR) {
+		if (WSAGetLastError() != WSA_IO_PENDING) {
+			printf("WSARecv() failed with error %d\n", WSAGetLastError());
+
+			free(buf);
+			return;
+		}
+	}
+
+}
