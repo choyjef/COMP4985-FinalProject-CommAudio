@@ -597,7 +597,7 @@ void CALLBACK TCPClientRecvDataCompRoutine(DWORD Error, DWORD BytesTransferred, 
 
 	}
 	else { //write to file
-		OutputDebugStringA(SI->DataBuf.buf);
+		//OutputDebugStringA(SI->DataBuf.buf);
 
 		if (fwrite(SI->DataBuf.buf, sizeof(char), DATA_BUFSIZE, fp) == -1) {
 			exit(1);
