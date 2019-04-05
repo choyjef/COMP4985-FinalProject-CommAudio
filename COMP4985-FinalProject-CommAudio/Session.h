@@ -1,6 +1,4 @@
 #pragma once
-#pragma comment(lib, "Winmm.lib")
-
 #include "Application.h"
 #include "Transport.h"
 //#include <winsock2.h>
@@ -9,7 +7,6 @@
 #include <string>
 #include <mmsystem.h> 
 #include <ws2tcpip.h>
-
 
 void listenTCP(HWND hwnd);
 void listenUDP(HWND hwnd);

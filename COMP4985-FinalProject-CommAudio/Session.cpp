@@ -48,6 +48,8 @@ u_short nInterval = TIMECAST_INTRVL;
 int nRet;
 SOCKADDR_IN stLclAddr, stSrcAddr;
 
+//LPSOCKET_INFORMATION SInfo;
+
 
 /*------------------------------------------------------------------------------------------------------------------
 --	FUNCTION:		initServer
@@ -148,6 +150,16 @@ void initClient(HWND hwnd, int protocol) {
 void listenTCP(HWND hwnd) {
 	SOCKET Listen;
 	SOCKADDR_IN InternetAddr;
+	WSADATA wsaData;
+	WORD wVersionRequested;
+
+	wVersionRequested = MAKEWORD(2, 2);
+
+	if ((WSAStartup(wVersionRequested, &wsaData)) != 0)
+	{
+		printf("WSAStartup failed with error \n");
+		return;
+	}
 
 	if ((Listen = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == -1) {
 		OutputDebugStringA("Can't create a stream socket");
@@ -267,6 +279,16 @@ void connectTCP(HWND hwnd) {
 	char errorMessage[1024];
 	int iRC;
 
+	WSADATA wsaData;
+	WORD wVersionRequested;
+
+	wVersionRequested = MAKEWORD(2, 2);
+
+	if ((WSAStartup(wVersionRequested, &wsaData)) != 0)
+	{
+		printf("WSAStartup failed with error \n");
+		return;
+	}
 
 	// create the socket
 	if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
