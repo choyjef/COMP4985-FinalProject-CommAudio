@@ -9,11 +9,7 @@
 #include <ws2tcpip.h>
 
 void listenTCP(HWND hwnd);
-void listenUDP(HWND hwnd);
-void initServer(HWND hwnd, int protocol);
-void initClient(HWND hwnd, int protocol);
 void connectTCP(HWND hwnd);
-void connectUDP();
 
 void initUnicastSend();
 void initUnicastRecv();
