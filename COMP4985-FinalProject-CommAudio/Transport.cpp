@@ -149,25 +149,51 @@ DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter) {
 
 	//todo: delete the next 4 lines of we uncomment above
 	// prepare socket for another read
-	Flags = 0;
+	
+	/*Flags = 0;
 	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
 	SocketInfo->DataBuf.len = DATA_BUFSIZE;
-	SocketInfo->DataBuf.buf = recvbuf;
+	SocketInfo->DataBuf.buf = recvbuf;*/
+
+	// TESTERINO
+	//generateTCPSendBufferData((SocketInfo->DataBuf.buf) + 1, DATA_BUFSIZE); //SocketInfo->DataBuf.buf is ding.wav (the filename is send by the client)
+	generateTCPSendBufferData(filePath, DATA_BUFSIZE);
+
+	SocketInfo->DataBuf.buf = sendBuffer;
+	SocketInfo->DataBuf.len = DATA_BUFSIZE;
+	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
+
+	if (sendBuffer < addressOfEnd) {
+		sendBuffer += DATA_BUFSIZE;
+	}
+	else {
+		return FALSE;
+	}
 	
+	// END TESTERINO
 
 	Flags = 0;
 	while (TRUE) {
 
 		// initiate another read with completion routine
-		if (WSARecv(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags, &(SocketInfo->Overlapped), TCPServerRecvCompRoutine) == SOCKET_ERROR) {
+		/*if (WSARecv(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags, &(SocketInfo->Overlapped), TCPServerRecvCompRoutine) == SOCKET_ERROR) {
 			if (WSAGetLastError() != WSA_IO_PENDING) {
 				char errorMessage[1024];
 				sprintf_s(errorMessage, "WSARecv() failed with error %d\n", WSAGetLastError());
 				OutputDebugStringA(errorMessage);
 				return FALSE;
 			}
-		}
+		}*/
 		
+		if (WSASend(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, Flags, &(SocketInfo->Overlapped), TCPServerSendWavCompRoutine) == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				char errorMessage[1024];
+				sprintf_s(errorMessage, "WSASend() failed with error %d\n", WSAGetLastError());
+				OutputDebugStringA(errorMessage);
+				return FALSE;
+			}
+		}
+
 		//todo: uncomment this if we decide to send list of .wav files to client and delete WSARecv
 		// sends the list of .wav file in the directory
 		//if (WSASend(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags, &(SocketInfo->Overlapped), TCPServerSendCompletionRoutine) == SOCKET_ERROR) {
