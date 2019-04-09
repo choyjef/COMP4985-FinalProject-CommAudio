@@ -56,7 +56,7 @@ int playbackSendPosition = 0;
 
 char* getDirectory(int size) {
 	DWORD fileError;
-	char directory[DATA_BUFSIZE];
+	char directory[PACKET_SIZE];
 	
 	HANDLE hFind = INVALID_HANDLE_VALUE;
 	WIN32_FIND_DATA findData;
@@ -64,18 +64,18 @@ char* getDirectory(int size) {
 
 	//Find files in current server directory
 	//1) find current directory
-	GetCurrentDirectory(DATA_BUFSIZE, directory);
+	GetCurrentDirectory(PACKET_SIZE, directory);
 	strcat_s(directory, "\\\*");
 	//2) find first file in current directory
 	hFind = FindFirstFile(directory, &findData);
-	strncpy_s(wavFileList, "=", DATA_BUFSIZE - 1);
+	//strncpy_s(wavFileList, "=", PACKET_SIZE - 1);
 
 	char fileName[260];
 	strcpy_s(fileName, findData.cFileName);
 	if (strstr(fileName, ".wav")) {
 
-		strncat_s(wavFileList, findData.cFileName, DATA_BUFSIZE - strlen(wavFileList) - 1);
-		strncat_s(wavFileList, "\0", DATA_BUFSIZE - strlen(wavFileList) - 1);
+		strncat_s(wavFileList, findData.cFileName, PACKET_SIZE - strlen(wavFileList) - 1);
+		strncat_s(wavFileList, "\0", PACKET_SIZE - strlen(wavFileList) - 1);
 	}
 
 	if (INVALID_HANDLE_VALUE == hFind)
@@ -90,8 +90,8 @@ char* getDirectory(int size) {
 		strcpy_s(fileName, findData.cFileName);
 		if (strstr(fileName, ".wav")) {
 
-			strncat_s(wavFileList, findData.cFileName, DATA_BUFSIZE - strlen(wavFileList) - 1);
-			strncat_s(wavFileList, "\n", DATA_BUFSIZE - strlen(wavFileList) - 1);
+			strncat_s(wavFileList, findData.cFileName, PACKET_SIZE - strlen(wavFileList) - 1);
+			strncat_s(wavFileList, "\n", PACKET_SIZE - strlen(wavFileList) - 1);
 		}
 	}
 
@@ -362,7 +362,8 @@ void CALLBACK TCPServerRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 	LPSOCKET_INFORMATION SocketInfo = (LPSOCKET_INFORMATION)Overlapped;
 	DWORD Flags = 0;
 	
-	generateTCPSendBufferData(SocketInfo->DataBuf.buf, DATA_BUFSIZE); //SocketInfo->DataBuf.buf is ding.wav (the filename is send by the client)
+	generateTCPSendBufferData((SocketInfo->DataBuf.buf) + 1, DATA_BUFSIZE); //SocketInfo->DataBuf.buf is ding.wav (the filename is send by the client)
+	//generateTCPSendBufferData(filePath, DATA_BUFSIZE);
 
 	SocketInfo->DataBuf.buf = sendBuffer;
 	SocketInfo->DataBuf.len = DATA_BUFSIZE;
@@ -416,7 +417,7 @@ DWORD WINAPI TCPClientWorkerThread(LPVOID lpParameter) {
 	DWORD Flags, Index, RecvBytes, SendBytes;
 	WSAEVENT EventArray[1];
 	LPSOCKET_INFORMATION SocketInfo;
-
+	char metaData[DATA_BUFSIZE];
 	//todo: not sure if 
 	/*char metaData[1024];
 
@@ -424,8 +425,10 @@ DWORD WINAPI TCPClientWorkerThread(LPVOID lpParameter) {
 	*/
 	EventArray[0] = WSACreateEvent();
 	SocketInfo = (LPSOCKET_INFORMATION)lpParameter;
+
+	sprintf_s(metaData, "T%s", filePath);
 	
-	SocketInfo->DataBuf.buf = filePath; //filePath is ding.wav or whateve the user entered in the UI
+	SocketInfo->DataBuf.buf = metaData; //filePath is ding.wav or whateve the user entered in the UI
 	SocketInfo->DataBuf.len = DATA_BUFSIZE;
 	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
 

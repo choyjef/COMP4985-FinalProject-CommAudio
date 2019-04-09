@@ -14,6 +14,8 @@
 using namespace std::chrono;
 
 extern char wavFileList[DATA_BUFSIZE];
+
+char* getDirectory(int size);
 void connectTCP(HWND hwnd);
 DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter);
 void CALLBACK TCPClientRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
