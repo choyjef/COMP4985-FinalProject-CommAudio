@@ -199,14 +199,6 @@ void initUnicastSend() {
 	DWORD ThreadId;
 	LPCLIENT_THREAD_PARAMS threadParams;
 
-	// start dll
-	//if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
-	//	//printf("DLL not found!\n");
-	//	OutputDebugStringA("DLL not found!");
-	//	exit(1);
-	//}
-	////printf("startup success \n");
-	//OutputDebugStringA("startup success");
 	// open wave file
 	if (!OpenWaveFile(filePath)) {
 		return;
@@ -262,13 +254,6 @@ void initUnicastRecv() {
 	int err;
 	HANDLE ThreadHandle;
 	DWORD ThreadId;
-
-	// start dll
-	//if ((err = WSAStartup(MAKEWORD(2, 2), &WSAData)) != 0) {
-	//	OutputDebugStringA("DLL not found!\n");
-	//	exit(1);
-	//}
-	//OutputDebugStringA("startup success \n");
 
 	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
 		OutputDebugStringA("error creating socket");

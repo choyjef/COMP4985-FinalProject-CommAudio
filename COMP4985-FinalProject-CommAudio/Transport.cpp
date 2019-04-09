@@ -444,11 +444,6 @@ DWORD WINAPI TCPClientWorkerThread(LPVOID lpParameter) {
 	WSAEVENT EventArray[1];
 	LPSOCKET_INFORMATION SocketInfo;
 	char metaData[DATA_BUFSIZE];
-	//todo: not sure if 
-	/*char metaData[1024];
-
-	sprintf_s(metaData, "+%d %d", getPacketSize(), getNumPackets());
-	*/
 	EventArray[0] = WSACreateEvent();
 	SocketInfo = (LPSOCKET_INFORMATION)lpParameter;
 
@@ -460,18 +455,6 @@ DWORD WINAPI TCPClientWorkerThread(LPVOID lpParameter) {
 
 	Flags = 0;
 	while (TRUE) {
-
-		//todo: Uncomment WSARECV and delete WSASEND if we decide that client should recieve a list of .wav files from the server
-		//// listen on port with specified completion routine
-		//if (WSARecv(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags, &(SocketInfo->Overlapped), TCPClientRecvCompRoutine) == SOCKET_ERROR) {
-		//	if (WSAGetLastError() != WSA_IO_PENDING) {
-		//		char errorMessage[1024];
-		//		sprintf_s(errorMessage, "WSARecv() failed with error %d\n", WSAGetLastError());
-		//		OutputDebugStringA(errorMessage);
-		//		free(recvbuf);
-		//		return FALSE;
-		//	}
-		//}
 
 		//Sends the .wav file title entered in the user UI
 		if (WSASend(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags, &(SocketInfo->Overlapped), TCPClientRecvDataCompRoutine) == SOCKET_ERROR) {
@@ -548,10 +531,6 @@ void CALLBACK TCPClientRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 		return;
 	}
 
-	//////
-	//Before assignement of SocketInfo->DataBuf.buf, it contains the list of .txt files send by the server
-	
-	//show list of wav file. close dialof box
 
 	SI->DataBuf.buf = filePath; //filePath is ding.wav
 	SI->DataBuf.len = DATA_BUFSIZE;
@@ -723,18 +702,12 @@ void CALLBACK UnicastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, L
 	SocketInfo = (LPSOCKET_INFORMATION)Overlapped;
 	char *buf;
 	char msg[1024];
-
+	WSAEVENT EventArray[1];
+	EventArray[0] = WSACreateEvent();
 	int peer_len = sizeof(SocketInfo->peer);
 
 	nPacketsSent++;
 	nBytesSent += BytesTransferred;
-	//printf("Packets sent: %d\n", TransferDetails::nPacketsSent);
-	//printf("Bytes sent: %d\n", TransferDetails::nBytesSent);
-
-	//sprintf_s(msg, "Packets sent: %d\n", TransferDetails::nPacketsSent);
-	//OutputDebugStringA(msg);
-	//sprintf_s(msg, "Bytes sent: %d\n", TransferDetails::nBytesSent);
-	//OutputDebugStringA(msg);
 
 	free(SocketInfo->DataBuf.buf);
 	buf = (char *)malloc(PACKET_SIZE);
@@ -754,7 +727,7 @@ void CALLBACK UnicastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, L
 		}
 
 		if (nPacketsSent % 10 == 0) {
-			Sleep(300);
+			WSAWaitForMultipleEvents(1, EventArray, FALSE, 300, TRUE);
 		}
 
 		memcpy(buf, WaveHeader.lpData + playbackSendPosition, bytesToRead);
@@ -887,7 +860,6 @@ DWORD WINAPI MulticastSendAudioWorkerThread(LPVOID lpParameter) {
 	// this is apppending header info only to first packet (cause it's in the worker thread)
 	// this will need to be appended to each packet
 	buf = (char *)malloc(sizeof(PCMWAVEFORMAT));
-	//buf = (char *)malloc(PACKET_SIZE);
 	memcpy(buf, &PCMWaveFmtRecord, sizeof(PCMWAVEFORMAT));
 
 	params = (CLIENT_THREAD_PARAMS*)lpParameter;
@@ -929,6 +901,8 @@ void CALLBACK MulticastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred,
 	LPSOCKET_INFORMATION SocketInfo;
 	SocketInfo = (LPSOCKET_INFORMATION)Overlapped;
 	char *buf;
+	WSAEVENT EventArray[1];
+	EventArray[0] = WSACreateEvent();
 	int headerLength = sizeof(PCMWAVEFORMAT);
 
 	int peer_len = sizeof(SocketInfo->peer);
@@ -956,7 +930,7 @@ void CALLBACK MulticastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred,
 		}
 
 		if (nPacketsSent % 10 == 0) {
-			Sleep(200);
+			WSAWaitForMultipleEvents(1, EventArray, FALSE, 200, TRUE);
 		}
 
 		memcpy(buf, &PCMWaveFmtRecord, sizeof(PCMWAVEFORMAT));
