@@ -153,6 +153,7 @@
     <ClInclude Include="COMP4985-FinalProject-CommAudio.h" />
     <ClInclude Include="LinkedList.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="resource1.h" />
     <ClInclude Include="Session.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Transport.h" />
@@ -165,6 +166,7 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="COMP4985-FinalProject-CommAudio.rc" />
+    <ResourceCompile Include="file_list.rc" />
     <ResourceCompile Include="menu.rc" />
     <ResourceCompile Include="winmenu.rc" />
   </ItemGroup>
