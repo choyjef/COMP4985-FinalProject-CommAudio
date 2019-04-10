@@ -15,15 +15,13 @@ using namespace std::chrono;
 
 extern char wavFileList[DATA_BUFSIZE];
 
-char* getDirectory(int size);
+char* getDirectory();
 void connectTCP(HWND hwnd);
 DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter);
-void CALLBACK TCPClientRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
 void CALLBACK TCPClientRecvDataCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
 DWORD WINAPI TCPClientWorkerThread(LPVOID lpParameter);
 void CALLBACK TCPServerSendWavCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
 void CALLBACK TCPServerRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
-void CALLBACK TCPServerSendCompletionRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
 
 DWORD WINAPI UnicastSendAudioWorkerThread(LPVOID lpParameter);
 void CALLBACK UnicastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
