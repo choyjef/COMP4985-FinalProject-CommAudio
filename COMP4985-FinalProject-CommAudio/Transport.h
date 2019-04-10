@@ -11,8 +11,6 @@
 #include <iostream>
 #include <fstream>
 
-using namespace std::chrono;
-
 extern char wavFileList[DATA_BUFSIZE];
 
 char* getDirectory(int size);
@@ -35,3 +33,10 @@ void CALLBACK MulticastAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred,
 
 DWORD WINAPI MulticastReceiveAudioWorkerThread(LPVOID lpParameter);
 void CALLBACK MulticastAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
+
+
+DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter);
+void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
+
+DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter);
+void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
