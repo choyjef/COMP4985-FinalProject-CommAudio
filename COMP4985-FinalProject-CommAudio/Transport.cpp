@@ -1446,7 +1446,7 @@ DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 	SocketInfo = &(params->SI);
 
 	//SocketInfo->DataBuf.len = sizeof(PCMWAVEFORMAT);
-
+	SocketInfo->DataBuf.buf = (char *)malloc(PACKET_SIZE);
 	//SocketInfo->DataBuf.buf = buf;
 	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
 	Flags = 0;
@@ -1456,8 +1456,10 @@ DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 		// Constantly check for data in sendQueue
 		if ((n = sendQueue.get_next()) == NULL) { continue; }
 
+		//SocketInfo->DataBuf.len = n->size;
+		//SocketInfo->DataBuf.buf = n->data;
+		memcpy(SocketInfo->DataBuf.buf, n->data, n->size);
 		SocketInfo->DataBuf.len = n->size;
-		SocketInfo->DataBuf.buf = n->data;
 
 		// listen on port with specified completion routine
 		if (WSASendTo(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags,
@@ -1511,12 +1513,15 @@ void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 
 	// Constantly check for data in sendQueue
 	while ((n = sendQueue.get_next()) == NULL) { continue; }
-	sendQueue.print();
+	//sendQueue.print();
 	OutputDebugString("Found data in sendQueue\n");
 
-	SocketInfo->DataBuf.len = PACKET_SIZE;
-	SocketInfo->DataBuf.buf = n->data;
-	playbackSendPosition += PACKET_SIZE;
+	//SocketInfo->DataBuf.len = PACKET_SIZE;
+	//SocketInfo->DataBuf.buf = n->data;
+
+	memcpy(SocketInfo->DataBuf.buf, n->data, n->size);
+	SocketInfo->DataBuf.len = n->size;
+	//playbackSendPosition += PACKET_SIZE;
 	if (WSASendTo(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags,
 		(sockaddr *) &(SocketInfo->peer), peer_len, &(SocketInfo->Overlapped), VoIPAudioSendCompRoutine) == SOCKET_ERROR) {
 		if (WSAGetLastError() != WSA_IO_PENDING) {
@@ -1561,7 +1566,7 @@ DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter)
 			}
 		}
 
-		OutputDebugString("Recv audio data\n");
+		//OutputDebugString("Recv audio data\n");
 
 		while (TRUE) {
 			Index = WSAWaitForMultipleEvents(1, EventArray, FALSE, 5000, TRUE);
@@ -1580,6 +1585,7 @@ void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, L
 	int server_len;
 	char *buf;
 
+
 	LPSOCKET_INFORMATION SI = (LPSOCKET_INFORMATION)Overlapped;
 
 	if (Error != 0) {
@@ -1596,18 +1602,20 @@ void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, L
 	}
 
 	nPacketsRecv++;
-	nBytesRecv += BytesTransferred;
-	printf("Received %d bytes\n", BytesTransferred);
-	printf("Packets received: %d\n", nPacketsRecv);
-	printf("Bytes received: %d\n", nBytesRecv);
+	//nBytesRecv += BytesTransferred;
+	//printf("Received %d bytes\n", BytesTransferred);
+	//printf("Packets received: %d\n", nPacketsRecv);
+	//printf("Bytes received: %d\n", nBytesRecv);
 
+	OutputDebugStringA("received\n");
 
 	playQueue.add_node(SI->DataBuf.buf, BytesTransferred);
-	if (nPacketsRecv == NUM_BUFFS + 1) {
+	if (nPacketsRecv == NUM_BUFFS) {
 		waveOutPause(wo);
 		streamPlayback();
 		waveOutRestart(wo);
 	}
+
 
 	ZeroMemory(&(SI->Overlapped), sizeof(WSAOVERLAPPED));
 	free(SI->DataBuf.buf);
@@ -1626,5 +1634,5 @@ void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, L
 			return;
 		}
 	}
-	OutputDebugString("Recv audio data\n");
+	//OutputDebugString("Recv audio data\n");
 }

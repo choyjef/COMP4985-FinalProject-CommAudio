@@ -21,4 +21,5 @@ void initUnicastRecv();
 void initMulticastSend();
 void initMulticastRecv();
 
-void initVoip();
+void initVoipSend();
+void initVoipRecv();
