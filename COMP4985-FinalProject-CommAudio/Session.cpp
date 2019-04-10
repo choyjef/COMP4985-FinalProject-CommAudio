@@ -720,104 +720,87 @@ VOID initMulticastSend() {
 	}
 }
 
-BOOL WaveMakeHeader(unsigned long ulSize, HGLOBAL HData, HGLOBAL HWaveHdr, LPSTR lpData, LPWAVEHDR lpWaveHdr)
+void initVoip()
 {
-	HData = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE, ulSize);
-	if (!HData) return FALSE;
+	WSADATA WSAData;
+	DWORD wVersionRequested;
+	SOCKET sock;
+	struct sockaddr_in client;
+	int iRC;
+	HANDLE SendThreadHandle, RecvThreadHandle, RecordThreadHandle, PlayThreadHandle;
+	DWORD SendThreadId, RecvThreadId, RecordThreadId, PlayThreadId;
+	LPCLIENT_THREAD_PARAMS threadParams;
 
-	lpData = (LPSTR)GlobalLock(HData);
-	if (!lpData)
+	wVersionRequested = MAKEWORD(2, 2);
+
+	if ((WSAStartup(wVersionRequested, &WSAData)) != 0)
 	{
-		GlobalFree(HData);
-		return FALSE;
+		printf("WSAStartup failed with error \n");
+		return;
 	}
 
-	HWaveHdr = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE, sizeof(WAVEHDR));
-	if (!HWaveHdr)
+	// create socket
+	if ((sock = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
+		//printf("error creating socket");
+		OutputDebugStringA("error creating socket");
+		char errmsg[128];
+		sprintf_s(errmsg, 128, "Error Number: %d\n", WSAGetLastError());
+		OutputDebugString(errmsg);
+		return;
+	}
+	//printf("socket created \n");
+	OutputDebugStringA("socket created");
+
+	// fill address 
+	memset((char *)&client, 0, sizeof(client));
+	client.sin_family = AF_INET;
+	client.sin_port = htons(VOIP_PORT);
+	client.sin_addr.s_addr = inet_addr(UNICAST_ADDRESS);
+
+	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
+		sizeof(SOCKET_INFORMATION))) == NULL)
 	{
-		GlobalUnlock(HData);
-		GlobalFree(HData);
-		return FALSE;
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "GlobalAlloc() failed with error %d\n", GetLastError());
+		OutputDebugStringA(errorMessage);
+		return;
+	}
+	SInfo->Socket = sock;
+	SInfo->BytesSEND = 0;
+	SInfo->BytesRECV = 0;
+	SInfo->peer = client;
+
+
+	threadParams = (LPCLIENT_THREAD_PARAMS)GlobalAlloc(GPTR, sizeof(CLIENT_THREAD_PARAMS));
+
+	threadParams->SI = *SInfo;
+	threadParams->sin = client;
+
+	// Create record audio thread
+	if ((RecordThreadHandle = CreateThread(NULL, 0, VoIPRecordAudioThread, (LPVOID)NULL, 0, &RecordThreadId)) == NULL)
+	{
+		OutputDebugStringA("CreateThread recordaudio failed");
+		return;
 	}
 
-	if (!lpWaveHdr)
+	// Create send audio thread
+	if ((SendThreadHandle = CreateThread(NULL, 0, VoIPSendAudioWorkerThread, (LPVOID)threadParams, 0, &SendThreadId)) == NULL) 
 	{
-		GlobalUnlock(HWaveHdr);
-		GlobalFree(HWaveHdr);
-		GlobalUnlock(HData);
-		GlobalFree(HData);
-		return FALSE;
+		OutputDebugStringA("CreateThread sendaudio failed");
+		return;
 	}
 
-	ZeroMemory(lpWaveHdr, sizeof(WAVEHDR));
-	lpWaveHdr->lpData = lpData;
-	lpWaveHdr->dwBufferLength = ulSize;
-
-	return TRUE;
-}
-
-
-void WaveFreeHeader(HGLOBAL HData, HGLOBAL HWaveHdr)
-{
-	GlobalUnlock(HWaveHdr);
-	GlobalFree(HWaveHdr);
-	GlobalUnlock(HData);
-	GlobalFree(HData);
-}
-
-BOOL WaveRecordOpen(LPHWAVEIN lphwi, HWND Hwnd, int nChannels, long lFrequency, int nBits)
-{
-	WAVEFORMATEX wfx;
-	wfx.wFormatTag = WAVE_FORMAT_PCM;
-	wfx.nChannels = (WORD)nChannels;
-	wfx.nSamplesPerSec = (DWORD)lFrequency;
-	wfx.wBitsPerSample = (WORD)nBits;
-	wfx.nBlockAlign = (WORD)((wfx.nChannels * wfx.wBitsPerSample) / 8);
-	wfx.nAvgBytesPerSec = (wfx.nSamplesPerSec * wfx.nBlockAlign);
-	wfx.cbSize = 0;
-
-	MMRESULT result = waveInOpen(lphwi, WAVE_MAPPER, &wfx, (LONG)Hwnd, NULL,
-		CALLBACK_WINDOW);
-
-	if (result == MMSYSERR_NOERROR) return TRUE;
-	return FALSE;
-}
-
-BOOL WaveRecordBegin(HWAVEIN hwi, LPWAVEHDR lpWaveHdr)
-{
-	MMRESULT result = waveInPrepareHeader(hwi, lpWaveHdr, sizeof(WAVEHDR));
-	if (result == MMSYSERR_NOERROR)
+	// Create recv audio thread
+	if ((RecvThreadHandle = CreateThread(NULL, 0, VoIPReceiveAudioWorkerThread, (LPVOID)threadParams, 0, &RecvThreadId)) == NULL)
 	{
-		MMRESULT result = waveInAddBuffer(hwi, lpWaveHdr, sizeof(WAVEHDR));
-		if (result == MMSYSERR_NOERROR)
-		{
-			MMRESULT result = waveInStart(hwi);
-			if (result == MMSYSERR_NOERROR) return TRUE;
-		}
+		OutputDebugStringA("CreateThread recvaudio failed");
+		return;
 	}
 
-	if (result == MMSYSERR_INVALHANDLE)
-		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_INVALHANDLE]\n");
-	if (result == MMSYSERR_NODRIVER)
-		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_NODRIVER]\n");
-	if (result == MMSYSERR_NOMEM)
-		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_NOMEM]\n");
-	if (result == MMSYSERR_INVALPARAM)
-		OutputDebugStringA("ERROR: WaveRecordBegin [MMSYSERR_INVALPARAM]\n");
-
-	return FALSE;
+	//// Create play audio thread
+	//if ((PlayThreadHandle = CreateThread(NULL, 0, VoIPPlayAudioThread, (LPVOID)NULL, 0, &PlayThreadId)) == NULL) 
+	//{
+	//	OutputDebugStringA("CreateThread playaudio failed");
+	//	return;
+	//}
 }
-
-void WaveRecordEnd(HWAVEIN hwi, LPWAVEHDR lpWaveHdr)
-{
-	waveInStop(hwi);
-	waveInReset(hwi);
-	waveInUnprepareHeader(hwi, lpWaveHdr, sizeof(WAVEHDR));
-}
-
-void WaveRecordClose(HWAVEIN hwi)
-{
-	waveInReset(hwi);
-	waveInClose(hwi);
-}
-

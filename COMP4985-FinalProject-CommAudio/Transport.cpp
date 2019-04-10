@@ -54,6 +54,9 @@ int nBytesRecv = 0;
 int nBytesSent = 0;
 int playbackSendPosition = 0;
 
+// Kiaan VoIP variables
+LPWAVEHDR audioToSend;
+
 
 char* getDirectory(int size) {
 	DWORD fileError;
@@ -1188,7 +1191,6 @@ void CALLBACK UnicastAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred
 		OpenOutputDevice();
 	}
 	else {
-
 		playQueue.add_node(SI->DataBuf.buf, BytesTransferred);
 		if (nPacketsRecv == NUM_BUFFS + 1) {
 			waveOutPause(wo);
@@ -1422,5 +1424,199 @@ void CALLBACK MulticastAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferr
 			return;
 		}
 	}
+}
 
+DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
+{
+	DWORD Flags, Index, SendBytes;
+	WSAEVENT EventArray[1];
+	CLIENT_THREAD_PARAMS* params;
+	LPSOCKET_INFORMATION SocketInfo;
+	char *buf;
+	int peer_len = sizeof(params->sin);
+	node * n;
+
+	//// send audio format data
+	buf = (char *)malloc(sizeof(PCMWAVEFORMAT));
+	//memcpy(buf, &PCMWaveFmtRecord, sizeof(PCMWAVEFORMAT));
+
+	params = (CLIENT_THREAD_PARAMS*)lpParameter;
+	EventArray[0] = WSACreateEvent();
+	SocketInfo = &(params->SI);
+
+	//SocketInfo->DataBuf.len = sizeof(PCMWAVEFORMAT);
+
+	//SocketInfo->DataBuf.buf = buf;
+	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
+	Flags = 0;
+
+	while (TRUE) {
+		// Constantly check for data in sendQueue
+		if ((n = sendQueue.get_next()) == NULL) { continue; }
+
+		SocketInfo->DataBuf.len = n->size;
+		SocketInfo->DataBuf.buf = n->data;
+
+		// listen on port with specified completion routine
+		if (WSASendTo(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags,
+			(sockaddr *) &(params->sin), peer_len, &(SocketInfo->Overlapped), VoIPAudioSendCompRoutine) == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				char err[1024];
+				//printf("WSARecv() failed with error %d\n", WSAGetLastError());
+				sprintf_s(err, "WSASendTo() failed with error: %d", WSAGetLastError());
+				OutputDebugStringA(err);
+				free(buf);
+				return FALSE;
+			}
+		}
+
+		linked_list::free_node(n);
+
+		// idle in alertable state for completion routine return
+		while (TRUE) {
+			Index = WSAWaitForMultipleEvents(1, EventArray, FALSE, WSA_INFINITE, TRUE);
+			if (Index == WSA_WAIT_FAILED) {
+				//printf("Wait for multiple event failed");
+				OutputDebugStringA("wait for multiple event failed");
+			}
+
+		}
+	}
+}
+
+void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags)
+{
+	//using namespace TransferDetails;
+	DWORD SendBytes, Flags;
+	LPSOCKET_INFORMATION SocketInfo;
+	sockaddr_in client;
+	int client_len;
+	SocketInfo = (LPSOCKET_INFORMATION)Overlapped;
+	char *buf;
+	char msg[1024];
+
+	int peer_len = sizeof(SocketInfo->peer);
+
+	nPacketsSent++;
+	nBytesSent += BytesTransferred;
+
+	//free(SocketInfo->DataBuf.buf);
+	//buf = (char *)malloc(PACKET_SIZE);
+	Flags = 0;
+
+	node * n;
+
+	// Constantly check for data in sendQueue
+	while ((n = sendQueue.get_next()) == NULL) { continue; }
+	OutputDebugString("Found data in sendQueue\n");
+
+	SocketInfo->DataBuf.len = PACKET_SIZE;
+	SocketInfo->DataBuf.buf = n->data;
+	playbackSendPosition += PACKET_SIZE;
+	if (WSASendTo(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags,
+		(sockaddr *) &(SocketInfo->peer), peer_len, &(SocketInfo->Overlapped), VoIPAudioSendCompRoutine) == SOCKET_ERROR) {
+		if (WSAGetLastError() != WSA_IO_PENDING) {
+			OutputDebugString("Failed to send packet\n");
+			printf("WSARecv() failed with error %d\n", WSAGetLastError());
+			//free(buf);
+			return;
+		}
+	}
+	OutputDebugString("Sent audio packet\n");
+	linked_list::free_node(n);
+}
+
+DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter)
+{
+	DWORD Flags, Index, RecvBytes;
+	WSAEVENT EventArray[1];
+	LPSOCKET_INFORMATION SocketInfo;
+	sockaddr_in server;
+	int server_len;
+	char * buf;
+
+	EventArray[0] = WSACreateEvent();
+	SocketInfo = (LPSOCKET_INFORMATION)lpParameter;
+
+	buf = (char *)malloc(PACKET_SIZE);
+	SocketInfo->DataBuf.buf = buf;
+	SocketInfo->DataBuf.len = PACKET_SIZE;
+	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
+	Flags = 0;
+	server_len = sizeof(server);
+
+	while (TRUE) {
+		if (WSARecvFrom(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags,
+			(sockaddr *)&server, &server_len, &(SocketInfo->Overlapped), VoIPAudioReceiveCompRoutine) == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				printf("WSARecv() failed with error %d\n", WSAGetLastError());
+
+				free(buf);
+				return FALSE;
+			}
+		}
+
+		while (TRUE) {
+			Index = WSAWaitForMultipleEvents(1, EventArray, FALSE, 5000, TRUE);
+			if (Index == WSA_WAIT_FAILED) {
+				OutputDebugStringA("Wait for multiple event failed");
+			}
+		}
+	}
+}
+
+void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags)
+{
+	DWORD RecvBytes;
+	DWORD Flags;
+	sockaddr_in server;
+	int server_len;
+	char *buf;
+
+	LPSOCKET_INFORMATION SI = (LPSOCKET_INFORMATION)Overlapped;
+
+	if (Error != 0) {
+		char errorMessage[1024];
+		sprintf_s(errorMessage, "I/O operation failed with error %d\n", Error);
+		OutputDebugStringA(errorMessage);
+		closesocket(SI->Socket);
+		return;
+	}
+	if (BytesTransferred == 0) {
+		printf("Closing socket %d\n", SI->Socket);
+		closesocket(SI->Socket);
+		return;
+	}
+
+	nPacketsRecv++;
+	nBytesRecv += BytesTransferred;
+	printf("Received %d bytes\n", BytesTransferred);
+	printf("Packets received: %d\n", nPacketsRecv);
+	printf("Bytes received: %d\n", nBytesRecv);
+
+
+	playQueue.add_node(SI->DataBuf.buf, BytesTransferred);
+	if (nPacketsRecv == NUM_BUFFS + 1) {
+		waveOutPause(wo);
+		streamPlayback();
+		waveOutRestart(wo);
+	}
+
+	ZeroMemory(&(SI->Overlapped), sizeof(WSAOVERLAPPED));
+	free(SI->DataBuf.buf);
+	buf = (char *)malloc(PACKET_SIZE);
+	SI->DataBuf.buf = buf;
+	SI->DataBuf.len = PACKET_SIZE;
+	server_len = sizeof(server);
+	Flags = 0;
+
+	if (WSARecvFrom(SI->Socket, &(SI->DataBuf), 1, &RecvBytes, &Flags,
+		(sockaddr *)&server, &server_len, &(SI->Overlapped), VoIPAudioReceiveCompRoutine) == SOCKET_ERROR) {
+		if (WSAGetLastError() != WSA_IO_PENDING) {
+			printf("WSARecv() failed with error %d\n", WSAGetLastError());
+
+			free(buf);
+			return;
+		}
+	}
 }

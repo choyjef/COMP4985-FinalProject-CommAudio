@@ -21,10 +21,4 @@ void initUnicastRecv();
 void initMulticastSend();
 void initMulticastRecv();
 
-// VoIP Functions
-BOOL WaveMakeHeader(unsigned long ulSize, HGLOBAL HData, HGLOBAL HWaveHdr, LPSTR lpData, LPWAVEHDR lpWaveHdr);
-void WaveFreeHeader(HGLOBAL HData, HGLOBAL HWaveHdr);
-BOOL WaveRecordOpen(LPHWAVEIN lphwi, HWND Hwnd, int nChannels, long lFrequency, int nBits);
-BOOL WaveRecordBegin(HWAVEIN hwi, LPWAVEHDR lpWaveHdr);
-void WaveRecordEnd(HWAVEIN hwi, LPWAVEHDR lpWaveHdr);
-void WaveRecordClose(HWAVEIN hwi);
+void initVoip();
