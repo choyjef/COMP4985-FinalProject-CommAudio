@@ -46,4 +46,3 @@ void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 
 DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter);
 void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags);
-

@@ -1140,8 +1140,9 @@ DWORD WINAPI UnicastReceiveAudioWorkerThread(LPVOID lpParameter) {
 		if (WSARecvFrom(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags,
 			(sockaddr *)&server, &server_len, &(SocketInfo->Overlapped), UnicastAudioReceiveCompRoutine) == SOCKET_ERROR) {
 			if (WSAGetLastError() != WSA_IO_PENDING) {
-				printf("WSARecv() failed with error %d\n", WSAGetLastError());
-
+				char errmsg[128];
+				sprintf_s(errmsg, 128, "WSARecvFrom: Error Number: %d\n", WSAGetLastError());
+				OutputDebugString(errmsg);
 				free(buf);
 				return FALSE;
 			}
@@ -1434,7 +1435,7 @@ DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 	LPSOCKET_INFORMATION SocketInfo;
 	char *buf;
 	int peer_len = sizeof(params->sin);
-	node * n;
+	node * n = (node *)malloc(sizeof(node));
 
 	//// send audio format data
 	buf = (char *)malloc(sizeof(PCMWAVEFORMAT));
@@ -1449,6 +1450,7 @@ DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 	//SocketInfo->DataBuf.buf = buf;
 	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
 	Flags = 0;
+
 
 	while (TRUE) {
 		// Constantly check for data in sendQueue
@@ -1471,6 +1473,7 @@ DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 		}
 
 		linked_list::free_node(n);
+		//OutputDebugString("Sent audio packet\n");
 
 		// idle in alertable state for completion routine return
 		while (TRUE) {
@@ -1501,13 +1504,14 @@ void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 	nBytesSent += BytesTransferred;
 
 	//free(SocketInfo->DataBuf.buf);
-	//buf = (char *)malloc(PACKET_SIZE);
+	buf = (char *)malloc(PACKET_SIZE);
 	Flags = 0;
 
 	node * n;
 
 	// Constantly check for data in sendQueue
 	while ((n = sendQueue.get_next()) == NULL) { continue; }
+	sendQueue.print();
 	OutputDebugString("Found data in sendQueue\n");
 
 	SocketInfo->DataBuf.len = PACKET_SIZE;
@@ -1522,7 +1526,7 @@ void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 			return;
 		}
 	}
-	OutputDebugString("Sent audio packet\n");
+	//OutputDebugString("Sent audio packet\n");
 	linked_list::free_node(n);
 }
 
@@ -1549,12 +1553,15 @@ DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter)
 		if (WSARecvFrom(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags,
 			(sockaddr *)&server, &server_len, &(SocketInfo->Overlapped), VoIPAudioReceiveCompRoutine) == SOCKET_ERROR) {
 			if (WSAGetLastError() != WSA_IO_PENDING) {
-				printf("WSARecv() failed with error %d\n", WSAGetLastError());
-
+				char errmsg[128];
+				sprintf_s(errmsg, "WSARecv() failed with error %d\n", WSAGetLastError());
+				updateStatusLogDisplay(errmsg);
 				free(buf);
 				return FALSE;
 			}
 		}
+
+		OutputDebugString("Recv audio data\n");
 
 		while (TRUE) {
 			Index = WSAWaitForMultipleEvents(1, EventArray, FALSE, 5000, TRUE);
@@ -1619,4 +1626,5 @@ void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, L
 			return;
 		}
 	}
+	OutputDebugString("Recv audio data\n");
 }

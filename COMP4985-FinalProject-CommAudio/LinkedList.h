@@ -69,6 +69,5 @@ public:
 			printf("%s", tmp->data);
 			tmp = tmp->next;
 		}
-
 	}
 };

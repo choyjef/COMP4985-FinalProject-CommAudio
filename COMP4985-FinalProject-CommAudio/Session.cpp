@@ -754,13 +754,18 @@ void initVoip()
 	// fill address 
 	memset((char *)&client, 0, sizeof(client));
 	client.sin_family = AF_INET;
-	client.sin_port = htons(VOIP_PORT);
-	client.sin_addr.s_addr = inet_addr(UNICAST_ADDRESS);
+	client.sin_port = htons(PORT);
+	client.sin_addr.s_addr = inet_addr(getHostIP());
+
+	if (bind(sock, (sockaddr *)&client, sizeof(client)) == -1) {
+		OutputDebugStringA("Can't bind name to socket dgram");
+		return;
+	}
 
 	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
 		sizeof(SOCKET_INFORMATION))) == NULL)
 	{
-		char errorMessage[1024];
+		char errorMessage[128];
 		sprintf_s(errorMessage, "GlobalAlloc() failed with error %d\n", GetLastError());
 		OutputDebugStringA(errorMessage);
 		return;
