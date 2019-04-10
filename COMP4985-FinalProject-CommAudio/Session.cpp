@@ -85,7 +85,7 @@ void listenTCP(HWND hwnd) {
 
 	if ((WSAStartup(wVersionRequested, &wsaData)) != 0)
 	{
-		printf("WSAStartup failed with error \n");
+		OutputDebugStringA("WSAStartup failed with error \n");
 		return;
 	}
 
@@ -149,7 +149,7 @@ void connectTCP(HWND hwnd) {
 
 	if ((WSAStartup(wVersionRequested, &wsaData)) != 0)
 	{
-		printf("WSAStartup failed with error \n");
+		OutputDebugStringA("WSAStartup failed with error \n");
 		return;
 	}
 
@@ -220,7 +220,7 @@ void initUnicastSend() {
 	memset((char *)&client, 0, sizeof(client));
 	client.sin_family = AF_INET;
 	client.sin_port = htons(UNICAST_PORT);
-	client.sin_addr.s_addr = inet_addr(UNICAST_ADDRESS);
+	client.sin_addr.s_addr = inet_addr(getHostIP());
 
 	if ((SInfo = (LPSOCKET_INFORMATION)GlobalAlloc(GPTR,
 		sizeof(SOCKET_INFORMATION))) == NULL)
