@@ -53,7 +53,30 @@ int nBytesRecv = 0;
 int nBytesSent = 0;
 int playbackSendPosition = 0;
 
-
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		getDirectory
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Jenny Ly
+--
+--
+--	PROGRAMMER:		Jenny Ly
+--
+--
+--	INTERFACE:		char* getDirectory(int size)
+--						int size: size of buffer
+--
+--	RETURNS:		char*
+--
+--
+--	NOTES:			Get all the .wav file in current server directory and returns the files in an array.
+----------------------------------------------------------------------------------------------------------------------*/
 char* getDirectory(int size) {
 	DWORD fileError;
 	char directory[PACKET_SIZE];
@@ -68,7 +91,6 @@ char* getDirectory(int size) {
 	strcat_s(directory, "\\\*");
 	//2) find first file in current directory
 	hFind = FindFirstFile(directory, &findData);
-	//strncpy_s(wavFileList, "=", PACKET_SIZE - 1);
 
 	char fileName[260];
 	strcpy_s(fileName, findData.cFileName);
@@ -121,7 +143,7 @@ char* getDirectory(int size) {
 --	DESIGNER:		Jeffrey Choy
 --
 --
---	PROGRAMMER:		Jeffrey Choy
+--	PROGRAMMER:		Jeffrey Choy, Jenny Ly
 --
 --
 --	INTERFACE:		DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter)
@@ -139,24 +161,6 @@ DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter) {
 	LPSOCKET_INFORMATION SocketInfo = (LPSOCKET_INFORMATION)lpParameter;;
 	EventArray[0] = WSACreateEvent();
 
-	//todo: uncomment this if we decide to send list of .wav files to client
-	//Add wavFileList to buffer for sending
-	//EventArray[0] = WSACreateEvent();
-	//SocketInfo = (LPSOCKET_INFORMATION)lpParameter;
-	//SocketInfo->DataBuf.len = DATA_BUFSIZE;
-	//SocketInfo->DataBuf.buf = getDirectory(DATA_BUFSIZE);
-	//ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
-
-	//todo: delete the next 4 lines of we uncomment above
-	// prepare socket for another read
-	
-	/*Flags = 0;
-	ZeroMemory(&(SocketInfo->Overlapped), sizeof(WSAOVERLAPPED));
-	SocketInfo->DataBuf.len = DATA_BUFSIZE;
-	SocketInfo->DataBuf.buf = recvbuf;*/
-
-	// TESTERINO
-	//generateTCPSendBufferData((SocketInfo->DataBuf.buf) + 1, DATA_BUFSIZE); //SocketInfo->DataBuf.buf is ding.wav (the filename is send by the client)
 	generateTCPSendBufferData(filePath, DATA_BUFSIZE);
 
 	SocketInfo->DataBuf.buf = sendBuffer;
@@ -170,20 +174,9 @@ DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter) {
 		return FALSE;
 	}
 	
-	// END TESTERINO
 
 	Flags = 0;
 	while (TRUE) {
-
-		// initiate another read with completion routine
-		/*if (WSARecv(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, &Flags, &(SocketInfo->Overlapped), TCPServerRecvCompRoutine) == SOCKET_ERROR) {
-			if (WSAGetLastError() != WSA_IO_PENDING) {
-				char errorMessage[1024];
-				sprintf_s(errorMessage, "WSARecv() failed with error %d\n", WSAGetLastError());
-				OutputDebugStringA(errorMessage);
-				return FALSE;
-			}
-		}*/
 		
 		if (WSASend(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &RecvBytes, Flags, &(SocketInfo->Overlapped), TCPServerSendWavCompRoutine) == SOCKET_ERROR) {
 			if (WSAGetLastError() != WSA_IO_PENDING) {
@@ -193,17 +186,6 @@ DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter) {
 				return FALSE;
 			}
 		}
-
-		//todo: uncomment this if we decide to send list of .wav files to client and delete WSARecv
-		// sends the list of .wav file in the directory
-		//if (WSASend(SocketInfo->Socket, &(SocketInfo->DataBuf), 1, &SendBytes, Flags, &(SocketInfo->Overlapped), TCPServerSendCompletionRoutine) == SOCKET_ERROR) {
-		//	if (WSAGetLastError() != WSA_IO_PENDING) {
-		//		char errorMessage[1024];
-		//		sprintf_s(errorMessage, "WSASend() failed with error %d\n", WSAGetLastError());
-		//		OutputDebugStringA(errorMessage);
-		//		return FALSE;
-		//	}
-		//}
 
 		// idle in alertable state for completion routine return
 		while (TRUE) {
@@ -218,81 +200,8 @@ DWORD WINAPI TCPServerWorkerThread(LPVOID lpParameter) {
 }
 
 
-//Todo: delete TCPServerSendCompletionRoutine if we are not going to send list of .wav files
 /*------------------------------------------------------------------------------------------------------------------
---	FUNCTION:		TCPServerSendCompletionRoutine
---
---
---	DATE:			February 13, 2019
---
---
---	REVISIONS:
---
---
---	DESIGNER:		Jeffrey Choy
---
---
---	PROGRAMMER:		Jeffrey Choy, Jenny Ly
---
---
---	INTERFACE:		void CALLBACK TCPRecvCompRoutine(DWORD Error, DWORD BytesTransferred,
---						LPWSAOVERLAPPED Overlapped, DWORD InFlags)
---							DWORD Error: struct container parameters to pass to the thread
---							DWORD BytesTransferred: number of bytes transferred from operation
---							LPWSAOVERLAPPED Overlapped: Overlapped structure for overlapped reading from socket
---							DWORD InFlags: input flags for completion routine
---
---	RETURNS:
---
---
---	NOTES:			Handles completion of receive action, parses data, stores meta data
---						and posts another receive.
-----------------------------------------------------------------------------------------------------------------------*/
-void CALLBACK TCPServerSendCompletionRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags) {
-	DWORD RecvBytes;
-	DWORD Flags;
-	char printout[DATA_BUFSIZE];
-
-	// populate socket information through cast SOMEHOW????
-	LPSOCKET_INFORMATION SI = (LPSOCKET_INFORMATION)Overlapped;
-
-	// error checking
-	if (Error != 0) {
-		char errorMessage[1024];
-		sprintf_s(errorMessage, "I/O operation failed with error %d\n", Error);
-		OutputDebugStringA(errorMessage);
-		closesocket(SI->Socket);
-		return;
-	}
-	if (BytesTransferred == 0) {
-		char errorMessage[1024];
-		sprintf_s(errorMessage, "Closing socket %d\n", SI->Socket);
-		OutputDebugStringA(errorMessage);
-		closesocket(SI->Socket);
-		return;
-	}
-
-	// prepare socket for another read
-	Flags = 0;
-	ZeroMemory(&(SI->Overlapped), sizeof(WSAOVERLAPPED));
-	SI->DataBuf.len = DATA_BUFSIZE;
-	SI->DataBuf.buf = recvbuf;
-
-
-	// initiate another read with completion routine
-	if (WSARecv(SI->Socket, &(SI->DataBuf), 1, &RecvBytes, &Flags, &(SI->Overlapped), TCPServerRecvCompRoutine) == SOCKET_ERROR) {
-		if (WSAGetLastError() != WSA_IO_PENDING) {
-			char errorMessage[1024];
-			sprintf_s(errorMessage, "WSARecv() failed with error %d\n", WSAGetLastError());
-			OutputDebugStringA(errorMessage);
-			//OutputDebugStringA("WSARecv() failed");
-			return;
-		}
-	}
-}
-
-/*------------------------------------------------------------------------------------------------------------------
---	FUNCTION:		TCPServerSendCompletionRoutine
+--	FUNCTION:		TCPServerSendWavCompRoutine
 --
 --
 --	DATE:			February 13, 2019
@@ -370,7 +279,7 @@ void CALLBACK TCPServerSendWavCompRoutine(DWORD Error, DWORD BytesTransferred, L
 --	PROGRAMMER:		Jenny Ly
 --
 --
---	INTERFACE:		void CALLBACK TCPRecvCompRoutine(DWORD Error, DWORD BytesTransferred,
+--	INTERFACE:		void CALLBACK TCPServerRecvCompRoutine(DWORD Error, DWORD BytesTransferred,
 --						LPWSAOVERLAPPED Overlapped, DWORD InFlags)
 --							DWORD Error: struct container parameters to pass to the thread
 --							DWORD BytesTransferred: number of bytes transferred from operation
@@ -389,7 +298,6 @@ void CALLBACK TCPServerRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 	DWORD Flags = 0;
 	
 	generateTCPSendBufferData((SocketInfo->DataBuf.buf) + 1, DATA_BUFSIZE); //SocketInfo->DataBuf.buf is ding.wav (the filename is send by the client)
-	//generateTCPSendBufferData(filePath, DATA_BUFSIZE);
 
 	SocketInfo->DataBuf.buf = sendBuffer;
 	SocketInfo->DataBuf.len = DATA_BUFSIZE;
@@ -422,7 +330,7 @@ void CALLBACK TCPServerRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 --	DATE:			February 13, 2019
 --
 --
---	REVISIONS:		April 3, 2019
+--	REVISIONS:		April 10, 2019
 --
 --
 --	DESIGNER:		Jeffrey Choy
@@ -478,75 +386,6 @@ DWORD WINAPI TCPClientWorkerThread(LPVOID lpParameter) {
 }
 
 
-//Following function is not used
-/*------------------------------------------------------------------------------------------------------------------
---	FUNCTION:		TCPSendCompRoutine
---
---
---	DATE:			February 13, 2019
---
---
---	REVISIONS:
---
---
---	DESIGNER:		Jeffrey Choy
---
---
---	PROGRAMMER:		Jeffrey Choy
---
---
---	INTERFACE:		void CALLBACK TCPSendCompRoutine(DWORD Error, DWORD BytesTransferred,
---						LPWSAOVERLAPPED Overlapped, DWORD InFlags)
---							DWORD Error: struct container parameters to pass to the thread
---							DWORD BytesTransferred: number of bytes transferred from operation
---							LPWSAOVERLAPPED Overlapped: Overlapped structure for overlapped reading from socket
---							DWORD InFlags: input flags for completion routine
---
---	RETURNS:
---
---
---	NOTES:			Handles completion of send action, posts another send if more data.
-----------------------------------------------------------------------------------------------------------------------*/
-void CALLBACK TCPClientRecvCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags) {
-	DWORD SendBytes;
-	DWORD Flags = 0;
-	char printout[DATA_BUFSIZE];
-
-	// populate socket information through cast SOMEHOW????
-	LPSOCKET_INFORMATION SI = (LPSOCKET_INFORMATION)Overlapped;
-
-	// error checking
-	if (Error != 0) {
-		char errorMessage[1024];
-		sprintf_s(errorMessage, "I/O operation failed with error %d\n", Error);
-		OutputDebugStringA(errorMessage);
-		closesocket(SI->Socket);
-		return;
-	}
-	if (BytesTransferred == 0) {
-		char errorMessage[1024];
-		sprintf_s(errorMessage, "Closing socket %d\n", SI->Socket);
-		OutputDebugStringA(errorMessage);
-		closesocket(SI->Socket);
-		return;
-	}
-
-
-	SI->DataBuf.buf = filePath; //filePath is ding.wav
-	SI->DataBuf.len = DATA_BUFSIZE;
-	ZeroMemory(&(SI->Overlapped), sizeof(WSAOVERLAPPED));
-
-	if (WSASend(SI->Socket, &(SI->DataBuf), 1, &SendBytes, Flags, &(SI->Overlapped), TCPClientRecvDataCompRoutine) == SOCKET_ERROR) {
-		if (WSAGetLastError() != WSA_IO_PENDING) {
-			char errorMessage[1024];
-			sprintf_s(errorMessage, "WSASend() failed with error %d\n", WSAGetLastError());
-			OutputDebugStringA(errorMessage);
-			//OutputDebugStringA("WSARecv() failed");
-			return;
-		}
-	}
-}
-
 /*------------------------------------------------------------------------------------------------------------------
 --	FUNCTION:		TCPClientRecvDataCompRoutine
 --
@@ -581,7 +420,7 @@ void CALLBACK TCPClientRecvDataCompRoutine(DWORD Error, DWORD BytesTransferred, 
 	DWORD Flags;
 	char printout[DATA_BUFSIZE];
 
-	// populate socket information through cast SOMEHOW????
+	// populate socket information through cast 
 	LPSOCKET_INFORMATION SI = (LPSOCKET_INFORMATION)Overlapped;
 
 	// error checking
@@ -612,17 +451,14 @@ void CALLBACK TCPClientRecvDataCompRoutine(DWORD Error, DWORD BytesTransferred, 
 
 	}
 	else { //write to file
-		//OutputDebugStringA(SI->DataBuf.buf);
 
 		if (fwrite(SI->DataBuf.buf, sizeof(char), DATA_BUFSIZE, fp) == -1) {
 			exit(1);
 		}
 	}
 
-
 	fclose(fp);
 
-	
 	// prepare socket for another read
 	Flags = 0;
 	ZeroMemory(&(SI->Overlapped), sizeof(WSAOVERLAPPED));
@@ -1054,6 +890,30 @@ void CALLBACK MulticastAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferr
 
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		VoIPSendAudioWorkerThread
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Kiaan Castillo
+--
+--
+--	PROGRAMMER:		Kiaan Castillo
+--
+--
+--	INTERFACE:		DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
+--
+--
+--	RETURNS:		DWORD
+--
+--
+--	NOTES:			Creates a thread to handle sending for choice chat
+----------------------------------------------------------------------------------------------------------------------*/
 DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 {
 	DWORD Flags, Index, SendBytes;
@@ -1116,6 +976,31 @@ DWORD WINAPI VoIPSendAudioWorkerThread(LPVOID lpParameter)
 	}
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		VoIPAudioSendCompRoutine
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Kiaan Castillo
+--
+--
+--	PROGRAMMER:		Kiaan Castillo
+--
+--
+--	INTERFACE:		void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, 
+--						LPWSAOVERLAPPED Overlapped, DWORD InFlags)
+--
+--
+--	RETURNS:		void
+--
+--
+--	NOTES:			Handles completion of sending audio data for voice chat
+----------------------------------------------------------------------------------------------------------------------*/
 void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags)
 {
 	//using namespace TransferDetails;
@@ -1162,6 +1047,30 @@ void CALLBACK VoIPAudioSendCompRoutine(DWORD Error, DWORD BytesTransferred, LPWS
 	linked_list::free_node(n);
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		VoIPReceiveAudioWorkerThread
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Kiaan Castillo
+--
+--
+--	PROGRAMMER:		Kiaan Castillo
+--
+--
+--	INTERFACE:		DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter)
+--
+--
+--	RETURNS:		DWORD
+--
+--
+--	NOTES:			Creates a thread to handle receiving of audio data for voice chat
+----------------------------------------------------------------------------------------------------------------------*/
 DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter)
 {
 	DWORD Flags, Index, RecvBytes;
@@ -1204,6 +1113,31 @@ DWORD WINAPI VoIPReceiveAudioWorkerThread(LPVOID lpParameter)
 	}
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		VoIPAudioReceiveCompRoutine
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Kiaan Castillo
+--
+--
+--	PROGRAMMER:		Kiaan Castillo
+--
+--
+--	INTERFACE:		void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, 
+--						LPWSAOVERLAPPED Overlapped, DWORD InFlags)
+--
+--
+--	RETURNS:		void
+--
+--
+--	NOTES:			Handles completion of receiving audio data for voice chat
+----------------------------------------------------------------------------------------------------------------------*/
 void CALLBACK VoIPAudioReceiveCompRoutine(DWORD Error, DWORD BytesTransferred, LPWSAOVERLAPPED Overlapped, DWORD InFlags)
 {
 	DWORD RecvBytes;

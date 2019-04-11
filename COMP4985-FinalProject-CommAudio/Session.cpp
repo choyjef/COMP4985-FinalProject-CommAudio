@@ -484,6 +484,30 @@ VOID initMulticastSend() {
 	}
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		initVoipSend
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Kiaan Castillo
+--
+--
+--	PROGRAMMER:		Kiaan Castillo
+--
+--
+--	INTERFACE:		void initVoipSend()
+--
+--
+--	RETURNS:		void
+--
+--
+--	NOTES:			Handles setup for UDP sending for voice chat
+----------------------------------------------------------------------------------------------------------------------*/
 void initVoipSend()
 {
 	WSADATA WSAData;
@@ -586,7 +610,30 @@ void initVoipSend()
 	//}
 }
 
-
+/*------------------------------------------------------------------------------------------------------------------
+--	FUNCTION:		initVoipRecv
+--
+--
+--	DATE:			April 9, 2019
+--
+--
+--	REVISIONS:
+--
+--
+--	DESIGNER:		Kiaan Castillo
+--
+--
+--	PROGRAMMER:		Kiaan Castillo
+--
+--
+--	INTERFACE:		void initVoipRecv()
+--
+--
+--	RETURNS:		void
+--
+--
+--	NOTES:			Handles setup for UDP receiving for voice chat
+----------------------------------------------------------------------------------------------------------------------*/
 void initVoipRecv()
 {
 	WSADATA WSAData;
