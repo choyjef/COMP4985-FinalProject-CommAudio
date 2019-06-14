@@ -1,0 +1,13 @@
+#include "resource.h"
+
+IDR_MYMENU MENU
+BEGIN
+    POPUP "Application Type"
+    BEGIN
+        MENUITEM "Client", ID_CLIENT
+		MENUITEM "Server", ID_SERVER
+    END
+	MENUITEM "Help", ID_HELP
+END
+
+//IDI_MYICON ICON "icon.ico"
